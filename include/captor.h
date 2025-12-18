@@ -11,12 +11,12 @@ extern "C" {
 #include <libavutil/log.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <av_err2str_cxx.h>
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 }
 
 #include "ffmpegfactory.h"
+#include "av_err2str_cxx.h"
 
 class Captor {
 public:
