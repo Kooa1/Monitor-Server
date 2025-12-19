@@ -5,8 +5,6 @@
 #ifndef MONITORSERVER_CAPTOR_H
 #define MONITORSERVER_CAPTOR_H
 
-#include <iostream>
-
 extern "C" {
 #include <libavutil/log.h>
 #include <libavcodec/avcodec.h>
@@ -14,6 +12,8 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 }
+
+#include <iostream>
 
 #include "ffmpegfactory.h"
 #include "av_err2str_cxx.h"
@@ -30,6 +30,7 @@ private:
 private:
     AVFormatContextPtr av_format_context;
     AVCodecContextPtr av_codec_context;
+    const AVInputFormat *av_input_format = nullptr;
 
 };
 
