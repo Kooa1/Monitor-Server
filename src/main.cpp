@@ -8,10 +8,16 @@
 
 #include "captor.h"
 
+extern "C" {
+#include <libavdevice/avdevice.h>
+}
+
 int main(int argc, char *argv[]) {
+    avdevice_register_all();
+
     QApplication a(argc, argv);
 
-    auto captor = std::make_unique<Captor>();
+    const auto captor = std::make_unique<Captor>();
 
     return QApplication::exec();
 }

@@ -14,9 +14,12 @@ extern "C" {
 }
 
 #include <iostream>
+#include <fstream>
 
 #include "ffmpegfactory.h"
 #include "av_err2str_cxx.h"
+
+using std::cout;
 
 class Captor {
 public:
@@ -25,13 +28,18 @@ public:
     ~Captor() = default;
 
 private:
+    void avfoundation_devices_list();
+
     void init_context();
 
 private:
     AVFormatContextPtr av_format_context;
     AVCodecContextPtr av_codec_context;
+    AVStreamPtr video_stream;
+    SwsContextPtr sws_context;
     const AVInputFormat *av_input_format = nullptr;
-
+    const AVCodec *av_codec = nullptr;
+    int video_index;
 };
 
 
