@@ -44,7 +44,13 @@ private:
     int video_index = 0;
 
     std::ofstream out_target;
+    std::string device_name;;
+
+#ifdef _WIN32
     const std::string path = "D:/Tools/src/test.yuv";
+#elif __APPLE__
+    const std::string path = "/Users/wuwenze/Desktop/photo/p/test.yuv";
+#endif
 };
 
 

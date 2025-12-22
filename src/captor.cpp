@@ -29,7 +29,14 @@ void Captor::avfoundation_devices_list() {
 }
 
 void Captor::init_context() {
+#ifdef _WIN32
     av_input_format = av_find_input_format("dshow");
+    device_name = "video=USB Camera"
+#elif __APPLE__
+    av_input_format = av_find_input_format("avfoundation");
+    device_name = "0";
+#endif
+
     if (!av_input_format) {
         av_log(nullptr, AV_LOG_ERROR, "find devices failed\n");
         return;
@@ -40,7 +47,7 @@ void Captor::init_context() {
     av_dict_set(&options, "framerate", "30", 0);
 
     auto ctx = av_format_context.get();
-    if (const int ret = avformat_open_input(&ctx, "video=USB Camera", av_input_format, &options); ret != 0) {
+    if (const int ret = avformat_open_input(&ctx, device_name.c_str(), av_input_format, &options); ret != 0) {
         av_log(nullptr, AV_LOG_ERROR, "open input format failed: %s\n", av_error_cxx(ret).c_str());
         return;
     }
@@ -76,6 +83,7 @@ void Captor::init_context() {
         return;
     }
 
+#ifdef _WIN32
     sws_context.reset(sws_getContext(av_codec_context->width,
                                      av_codec_context->height,
                                      av_codec_context->pix_fmt,
@@ -86,6 +94,7 @@ void Captor::init_context() {
                                      nullptr,
                                      nullptr,
                                      nullptr));
+#endif
 
     out_target.open(path, std::ios::binary);
     if (!out_target) {
@@ -148,12 +157,15 @@ void Captor::decode_video(AVPacketPtr av_packet) {
             continue;
         }
 
-        cout << "Frame received: width=" << frame->width
-                << ", height=" << frame->height
-                << ", format=" << frame->format
-                << ", pts=" << frame->pts << '\n';
+        // cout << "Frame received: width=" << frame->width
+                // << ", height=" << frame->height
+                // << ", format=" << frame->format
+                // << ", pts=" << frame->pts << '\n';
 
+        auto ctx_time_base = av_format_context->streams[video_index]->time_base;
+        cout << "frame pts: " << frame->pts *  av_q2d(ctx_time_base) << '\n';
 
+#ifdef _WIN32
         sws_scale(sws_context.get(),
                   frame->data,
                   frame->linesize,
@@ -162,13 +174,6 @@ void Captor::decode_video(AVPacketPtr av_packet) {
                   frame->data,
                   frame->linesize
         );
-
-        // out_target.write(reinterpret_cast<const char *>(frame->data[0]),
-        //                  av_codec_context->width * av_codec_context->height);
-        // out_target.write(reinterpret_cast<const char *>(frame->data[1]),
-        //                  av_codec_context->width * av_codec_context->height / 4);
-        // out_target.write(reinterpret_cast<const char *>(frame->data[2]),
-        //                  av_codec_context->width * av_codec_context->height / 4);
 
         // Y 分量（完整分辨率）
         for (int i = 0; i < av_codec_context->height; i++) {
@@ -187,5 +192,10 @@ void Captor::decode_video(AVPacketPtr av_packet) {
             out_target.write(reinterpret_cast<const char *>(frame->data[2] + i * frame->linesize[2]),
                              av_codec_context->width / 2);
         }
+
+#elif __APPLE__
+        out_target.write(reinterpret_cast<const char *>(frame->data[0]),
+                         av_codec_context->width * av_codec_context->height * 2);
+#endif
     }
 }

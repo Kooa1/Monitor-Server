@@ -87,6 +87,7 @@ elseif (APPLE)
             Qt6::Core
             Qt6::Gui
             Qt6::Widgets
+            avdevice
             avformat
             avcodec
             avutil
