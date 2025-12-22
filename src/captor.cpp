@@ -6,11 +6,29 @@
 
 Captor::Captor() {
     av_log_set_level(AV_LOG_INFO);
-    // avfoundation_devices_list();
     init_context();
 }
 
 void Captor::avfoundation_devices_list() {
+    // av_input_format = av_find_input_format("dshow");
+    // if (!av_input_format) {
+    //     av_log(nullptr, AV_LOG_ERROR, "find devices failed\n");
+    //     return;
+    // }
+
+    // av_format_context.reset(avformat_alloc_context(), AVFormatContextDeleter());
+    // AVDictionary *options = nullptr;
+    // av_dict_set(&options, "list_devices", "true", 0);
+
+    // auto ctx = av_format_context.get();
+    // if (const int ret = avformat_open_input(&ctx, "video=USB Camera", av_input_format, &options); ret != 0) {
+    //     av_log(nullptr, AV_LOG_ERROR, "open input format failed: %s\n", av_error_cxx(ret).c_str());
+    //     cout << ret + '\n';
+    //     return;
+    // }
+}
+
+void Captor::init_context() {
     av_input_format = av_find_input_format("dshow");
     if (!av_input_format) {
         av_log(nullptr, AV_LOG_ERROR, "find devices failed\n");
@@ -19,21 +37,10 @@ void Captor::avfoundation_devices_list() {
 
     av_format_context.reset(avformat_alloc_context(), AVFormatContextDeleter());
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "list_devices", "true", 0);
-
-    auto ctx = av_format_context.get();
-    if (const int ret = avformat_open_input(&ctx, "0", av_input_format, &options); ret != 0) {
-        av_log(nullptr, AV_LOG_ERROR, "open input format failed: %s\n", av_error_cxx(ret).c_str());
-        return;
-    }
-}
-
-void Captor::init_context() {
-    AVDictionary *options = nullptr;
     av_dict_set(&options, "framerate", "30", 0);
 
     auto ctx = av_format_context.get();
-    if (const int ret = avformat_open_input(&ctx, "0", av_input_format, &options); ret != 0) {
+    if (const int ret = avformat_open_input(&ctx, "video=USB Camera", av_input_format, &options); ret != 0) {
         av_log(nullptr, AV_LOG_ERROR, "open input format failed: %s\n", av_error_cxx(ret).c_str());
         return;
     }
@@ -56,5 +63,129 @@ void Captor::init_context() {
                                                       av_format_context->streams[video_index]->codecpar); ret < 0) {
         av_log(nullptr, AV_LOG_ERROR, "copy parameters failed: %s\n", av_error_cxx(ret).c_str());
         return;
+    }
+
+    av_coder = avcodec_find_decoder(av_codec_context->codec_id);
+    if (!av_coder) {
+        av_log(nullptr, AV_LOG_ERROR, "find decoder failed\n");
+        return;
+    }
+
+    if (const int ret = avcodec_open2(av_codec_context.get(), av_coder, nullptr); ret != 0) {
+        av_log(nullptr, AV_LOG_ERROR, "open decoder failed: %s\n", av_error_cxx(ret).c_str());
+        return;
+    }
+
+    sws_context.reset(sws_getContext(av_codec_context->width,
+                                     av_codec_context->height,
+                                     av_codec_context->pix_fmt,
+                                     av_codec_context->width,
+                                     av_codec_context->height,
+                                     AV_PIX_FMT_YUV420P,
+                                     SWS_FAST_BILINEAR,
+                                     nullptr,
+                                     nullptr,
+                                     nullptr));
+
+    out_target.open(path, std::ios::binary);
+    if (!out_target) {
+        std::cerr << "error, target failed\n";
+    }
+
+    if (!out_target.is_open()) {
+        std::cerr << "error, open file failed\n";
+    }
+
+    AVPacketPtr av_packet;
+    while (true) {
+        // cout << "start\n";
+        av_packet.reset(av_packet_alloc(), AVPacketDeleter());
+
+        if (const int ret = av_read_frame(av_format_context.get(), av_packet.get()); ret == AVERROR_EOF) {
+            break;
+        } else if (ret == AVERROR(EAGAIN) || ret < 0) {
+            continue;
+        }
+
+        if (av_packet->stream_index == video_index) {
+            decode_video(std::move(av_packet));
+            // cout << "send it\n";
+        }
+    }
+
+    decode_video(nullptr);
+}
+
+void Captor::decode_video(AVPacketPtr av_packet) {
+    const auto packet = std::move(av_packet);
+    if (const int ret = avcodec_send_packet(av_codec_context.get(), packet.get()); ret < 0) {
+        av_log(nullptr, AV_LOG_ERROR, "send frame failed: %s\n", av_error_cxx(ret).c_str());
+        return;
+    }
+
+    while (true) {
+        AVFramePtr frame;
+        frame.reset(av_frame_alloc(), AVFrameDeleter());
+        if (!frame) return;
+
+        int ret = avcodec_receive_frame(av_codec_context.get(), frame.get());
+        if (ret == AVERROR(EAGAIN)) {
+            av_log(nullptr, AV_LOG_DEBUG, "need more data : %s\n", av_error_cxx(ret).c_str());
+            break;
+        }
+
+        if (ret == AVERROR_EOF) {
+            av_log(nullptr, AV_LOG_ERROR, "video read file end : %s\n", av_error_cxx(ret).c_str());
+            break;
+        }
+
+        if (ret == AVERROR_INVALIDDATA) {
+            continue;
+        }
+
+        if (ret < 0) {
+            av_log(nullptr, AV_LOG_ERROR, "receive video frame failed: %s\n", av_error_cxx(ret).c_str());
+            continue;
+        }
+
+        cout << "Frame received: width=" << frame->width
+                << ", height=" << frame->height
+                << ", format=" << frame->format
+                << ", pts=" << frame->pts << '\n';
+
+
+        sws_scale(sws_context.get(),
+                  frame->data,
+                  frame->linesize,
+                  0,
+                  av_codec_context->height,
+                  frame->data,
+                  frame->linesize
+        );
+
+        // out_target.write(reinterpret_cast<const char *>(frame->data[0]),
+        //                  av_codec_context->width * av_codec_context->height);
+        // out_target.write(reinterpret_cast<const char *>(frame->data[1]),
+        //                  av_codec_context->width * av_codec_context->height / 4);
+        // out_target.write(reinterpret_cast<const char *>(frame->data[2]),
+        //                  av_codec_context->width * av_codec_context->height / 4);
+
+        // Y 分量（完整分辨率）
+        for (int i = 0; i < av_codec_context->height; i++) {
+            out_target.write(reinterpret_cast<const char *>(frame->data[0] + i * frame->linesize[0]),
+                             av_codec_context->width);
+        }
+
+        // U 分量（1/4 分辨率，YUV420格式）
+        for (int i = 0; i < av_codec_context->height / 2; i++) {
+            out_target.write(reinterpret_cast<const char *>(frame->data[1] + i * frame->linesize[1]),
+                             av_codec_context->width / 2);
+        }
+
+        // V 分量（1/4 分辨率，YUV420格式）
+        for (int i = 0; i < av_codec_context->height / 2; i++) {
+            out_target.write(reinterpret_cast<const char *>(frame->data[2] + i * frame->linesize[2]),
+                             av_codec_context->width / 2);
+        }
     }
 }

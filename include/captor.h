@@ -32,14 +32,19 @@ private:
 
     void init_context();
 
+    void decode_video(AVPacketPtr av_packet);
+
 private:
-    AVFormatContextPtr av_format_context;
-    AVCodecContextPtr av_codec_context;
-    AVStreamPtr video_stream;
-    SwsContextPtr sws_context;
+    AVFormatContextPtr av_format_context = nullptr;
+    AVCodecContextPtr av_codec_context = nullptr;
+    AVStreamPtr video_stream = nullptr;
+    SwsContextPtr sws_context = nullptr;
     const AVInputFormat *av_input_format = nullptr;
-    const AVCodec *av_codec = nullptr;
-    int video_index;
+    const AVCodec *av_coder = nullptr;
+    int video_index = 0;
+
+    std::ofstream out_target;
+    const std::string path = "D:/Tools/src/test.yuv";
 };
 
 
