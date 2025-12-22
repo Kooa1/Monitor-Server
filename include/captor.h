@@ -28,8 +28,6 @@ public:
     ~Captor() = default;
 
 private:
-    void avfoundation_devices_list();
-
     void init_context();
 
     void decode_video(AVPacketPtr av_packet);
@@ -51,6 +49,7 @@ private:
 #elif __APPLE__
     const std::string path = "/Users/wuwenze/Desktop/photo/p/test.yuv";
 #endif
+
 };
 
 

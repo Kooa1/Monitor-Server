@@ -9,29 +9,10 @@ Captor::Captor() {
     init_context();
 }
 
-void Captor::avfoundation_devices_list() {
-    // av_input_format = av_find_input_format("dshow");
-    // if (!av_input_format) {
-    //     av_log(nullptr, AV_LOG_ERROR, "find devices failed\n");
-    //     return;
-    // }
-
-    // av_format_context.reset(avformat_alloc_context(), AVFormatContextDeleter());
-    // AVDictionary *options = nullptr;
-    // av_dict_set(&options, "list_devices", "true", 0);
-
-    // auto ctx = av_format_context.get();
-    // if (const int ret = avformat_open_input(&ctx, "video=USB Camera", av_input_format, &options); ret != 0) {
-    //     av_log(nullptr, AV_LOG_ERROR, "open input format failed: %s\n", av_error_cxx(ret).c_str());
-    //     cout << ret + '\n';
-    //     return;
-    // }
-}
-
 void Captor::init_context() {
 #ifdef _WIN32
     av_input_format = av_find_input_format("dshow");
-    device_name = "video=USB Camera"
+    device_name = "video=USB Camera";
 #elif __APPLE__
     av_input_format = av_find_input_format("avfoundation");
     device_name = "0";
@@ -44,6 +25,7 @@ void Captor::init_context() {
 
     av_format_context.reset(avformat_alloc_context(), AVFormatContextDeleter());
     AVDictionary *options = nullptr;
+    av_dict_set(&options, "video_size", "1920x1080", 0);
     av_dict_set(&options, "framerate", "30", 0);
 
     auto ctx = av_format_context.get();
@@ -107,7 +89,6 @@ void Captor::init_context() {
 
     AVPacketPtr av_packet;
     while (true) {
-        // cout << "start\n";
         av_packet.reset(av_packet_alloc(), AVPacketDeleter());
 
         if (const int ret = av_read_frame(av_format_context.get(), av_packet.get()); ret == AVERROR_EOF) {
@@ -118,7 +99,6 @@ void Captor::init_context() {
 
         if (av_packet->stream_index == video_index) {
             decode_video(std::move(av_packet));
-            // cout << "send it\n";
         }
     }
 
@@ -158,12 +138,12 @@ void Captor::decode_video(AVPacketPtr av_packet) {
         }
 
         // cout << "Frame received: width=" << frame->width
-                // << ", height=" << frame->height
-                // << ", format=" << frame->format
-                // << ", pts=" << frame->pts << '\n';
+        // << ", height=" << frame->height
+        // << ", format=" << frame->format
+        // << ", pts=" << frame->pts << '\n';
 
         auto ctx_time_base = av_format_context->streams[video_index]->time_base;
-        cout << "frame pts: " << frame->pts *  av_q2d(ctx_time_base) << '\n';
+        cout << "frame pts: " << frame->pts * av_q2d(ctx_time_base) << '\n';
 
 #ifdef _WIN32
         sws_scale(sws_context.get(),

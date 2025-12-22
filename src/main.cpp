@@ -13,6 +13,9 @@ extern "C" {
 }
 
 int main(int argc, char *argv[]) {
+
+    const std::string rtmp_url = "rtemp://172.28.206.198/live/stream_key";
+
     avdevice_register_all();
 
     QApplication a(argc, argv);
